@@ -1,0 +1,149 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+model MissenseVariants {
+  uniprot  String @db.VarChar(12)
+  position Int
+  wildtype String @db.VarChar(3)
+  mutant   String @db.VarChar(3)
+
+  m3d_predictions   M3DPredictions[]
+  alphafold_metrics AlphafoldMetrics?   @relation(fields: [uniprot, position], references: [uniprot, position])
+  protein           Proteins            @relation(fields: [uniprot], references: [uniprot])
+  clinvar           ClinvarAnnotations?
+  genetic_variants  GeneticVariants[]
+
+  @@id([uniprot, position, wildtype, mutant])
+  @@unique([uniprot, position, wildtype, mutant])
+  @@index([uniprot, position, wildtype, mutant])
+}
+
+model GeneticVariants {
+  hgvs_g   String  @id @db.VarChar(100)
+  rs_id    String? @db.VarChar(20)
+  uniprot  String  @db.VarChar(12)
+  position Int
+  wildtype String  @db.VarChar(3)
+  mutant   String  @db.VarChar(3)
+
+  missense_variants MissenseVariants   @relation(fields: [uniprot, position, wildtype, mutant], references: [uniprot, position, wildtype, mutant])
+  gnomadg_v3_1_2_af GnomadAFg_v_3_1_2?
+
+  @@index([uniprot, position, wildtype, mutant])
+}
+
+model Proteins {
+  uniprot      String @id @db.VarChar(12)
+  gene_name    String
+  protein_name String @db.LongText
+  length       Int
+
+  missense_variants MissenseVariants[]
+
+  @@index([gene_name, uniprot]) // people would probably search by gene name
+}
+
+model M3DPredictions {
+  id                            Int      @id @default(autoincrement())
+  uniprot                       String   @db.VarChar(12)
+  position                      Int
+  wildtype                      String   @db.VarChar(3)
+  mutant                        String   @db.VarChar(3)
+  damaging                      Boolean
+  disulphide_breakage           Boolean
+  buried_Pro_introduced         Boolean
+  clash                         Boolean
+  buried_hydrophilic_introduced Boolean
+  buried_charge_introduced      Boolean
+  secondary_structure_altered   Boolean
+  buried_charge_switch          Boolean
+  disallowed_phi_psi            Boolean
+  buried_charge_replaced        Boolean
+  buried_Gly_replaced           Boolean
+  buried_H_bond_breakage        Boolean
+  buried_salt_bridge_breakage   Boolean
+  cavity_altered                Boolean
+  buried_exposed_switch         Boolean
+  cis_pro_replaced              Boolean
+  gly_in_a_bend                 Boolean
+  algorithm_version             String
+  created_at                    DateTime @default(now())
+
+  variant MissenseVariants @relation(fields: [uniprot, position, wildtype, mutant], references: [uniprot, position, wildtype, mutant])
+
+  @@unique([uniprot, position, wildtype, mutant, algorithm_version])
+  @@index([uniprot, position, wildtype, mutant])
+  @@index([algorithm_version])
+}
+
+model AlphafoldMetrics {
+  uniprot           String  @db.VarChar(12)
+  position          Int
+  plddt_5A          Decimal @db.Decimal(6, 3)
+  pae_5A            Decimal @db.Decimal(6, 3)
+  plddt_window_31   Decimal @db.Decimal(6, 3)
+  num_neighbours_5A Int
+
+  variants MissenseVariants[]
+
+  @@id([uniprot, position])
+  @@index([uniprot, position])
+}
+
+model ClinvarAnnotations {
+  uniprot    String   @db.VarChar(12)
+  position   Int
+  wildtype   String   @db.VarChar(3)
+  mutant     String   @db.VarChar(3)
+  annotation String
+  created_at DateTime @default(now())
+
+  variant MissenseVariants @relation(fields: [uniprot, position, wildtype, mutant], references: [uniprot, position, wildtype, mutant])
+
+  @@id([uniprot, position, wildtype, mutant])
+  @@index([uniprot, position, wildtype, mutant])
+}
+
+model GnomadAFg_v_3_1_2 {
+  hgvs_g           String  @id
+  allele_frequency Decimal @db.Decimal(10, 10)
+
+  genetic_variant GeneticVariants @relation(fields: [hgvs_g], references: [hgvs_g])
+
+  @@index([hgvs_g])
+}
+
+// logging tables
+model RequestLogs {
+  request_id           Int      @id @default(autoincrement())
+  url                  String
+  query                String?
+  method               String
+  response_status_code Int
+  timestamp            DateTime
+
+  error_log ErrorLogs?
+
+  @@index([timestamp])
+}
+
+model ErrorLogs {
+  error_id    Int    @id @default(autoincrement())
+  request_id  Int    @unique
+  stack_trace String @db.LongText
+  message     String @db.LongText
+
+  request_log RequestLogs @relation(fields: [request_id], references: [request_id])
+
+  @@index([request_id])
+}
