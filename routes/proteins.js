@@ -8,12 +8,15 @@ router.get('/:string', errorBoundary(async (req, res) => {
 
     // prevent search with 'HUMAN' in the string as all gene names have '_HUMAN' suffix
     const searchString = req.params.string.toUpperCase().replace('HUMAN','')
+    const { offset, limit } = req.query
 
     if (searchString === '') {
         res.status(204).json({})
     }
 
     const prismaResponse = await prisma.proteins.findMany({
+        skip: offset && limit ? Number(offset) : undefined,
+        take: offset && limit ? Number(limit) : undefined,
         select: {
             gene_name: true,
             uniprot: true,
@@ -39,7 +42,7 @@ router.get('/:string', errorBoundary(async (req, res) => {
                     }
                 }
             ]
-        }
+        },
     })
 
     if (prismaResponse.length === 0) {
